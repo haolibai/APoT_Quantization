@@ -97,22 +97,23 @@ def weight_quantization(b, grids, power=True):
 
 
 class weight_quantize_fn(nn.Module):
-    def __init__(self, w_bit, power=True):
+    def __init__(self, w_bit, power=True, init_alpha=3.0):
         super(weight_quantize_fn, self).__init__()
         assert (w_bit <=5 and w_bit > 0) or w_bit == 32
         self.w_bit = w_bit-1
         self.power = power if w_bit>2 else False
         self.grids = build_power_value(self.w_bit, additive=True)
         self.weight_q = weight_quantization(b=self.w_bit, grids=self.grids, power=self.power)
-        self.register_parameter('wgt_alpha', Parameter(torch.tensor(3.0)))
+        self.register_parameter('wgt_alpha', Parameter(torch.tensor(init_alpha)))
 
     def forward(self, weight):
         if self.w_bit == 32:
             weight_q = weight
         else:
-            mean = weight.data.mean()
-            std = weight.data.std()
-            weight = weight.add(-mean).div(std)      # weights normalization
+            # TODO
+            # mean = weight.data.mean()
+            # std = weight.data.std()
+            # weight = weight.add(-mean).div(std)      # weights normalization
             weight_q = self.weight_q(weight, self.wgt_alpha)
         return weight_q
 
@@ -163,7 +164,8 @@ class QuantConv2d(nn.Conv2d):
                                           bias)
         self.layer_type = 'QuantConv2d'
         self.bit = 4
-        self.weight_quant = weight_quantize_fn(w_bit=self.bit, power=True)
+        init_alpha = self.weight.max() * 0.7
+        self.weight_quant = weight_quantize_fn(w_bit=self.bit, power=True, init_alpha=init_alpha)
         self.act_grid = build_power_value(self.bit, additive=True)
         self.act_alq = act_quantization(self.bit, self.act_grid, power=True)
         self.act_alpha = torch.nn.Parameter(torch.tensor(8.0))
